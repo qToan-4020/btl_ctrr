@@ -1,4 +1,5 @@
 ## thằng nào làm phần sau thì dựa theo cấu trúc tao chia file mà làm tiếp nha 
+
 project/
 │
 ├── main.py                  # [Cửa chính] Nơi khởi chạy ứng dụng
