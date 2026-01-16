@@ -1,6 +1,9 @@
 CẤU TRÚC DỰ ÁN GRAPH VISUALIZATION (MVC PATTERN)
 ================================================
 
+# CẤU TRÚC DỰ ÁN GRAPH VISUALIZATION (MVC PATTERN)
+
+```text
 project/
 │
 ├── main.py                  # [Cửa chính] Chạy file này để mở ứng dụng
@@ -24,13 +27,13 @@ project/
 │
 ├── controller/              # [Controller] Xử lý logic
 │   ├── __init__.py
-│   └── graph_controller.py  # Điều phối: Nhận click -> Gọi thuật toán -> Vẽ lại
+│   ├── graph_controller.py  # Điều phối: Nhận click -> Gọi thuật toán -> Vẽ lại
+│   └── __init__.py
 │
 └── utils/                   # [Tiện ích] Cấu hình chung
     ├── __init__.py
     ├── constants.py         # Màu sắc, kích thước, font chữ
     └── helpers.py           # Hàm tính toán khoảng cách
-
 
 =================================================
 1. graph/graph_model.py (Quan trọng nhất)
