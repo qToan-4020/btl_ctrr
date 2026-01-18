@@ -27,7 +27,6 @@ const App: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<Network | null>(null);
   const bottomLogRef = useRef<HTMLDivElement>(null); 
-  // Ref cho input file ẩn
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // --- DỮ LIỆU KHỞI TẠO ---
@@ -65,91 +64,92 @@ const App: React.FC = () => {
   useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
   useEffect(() => { if (bottomLogRef.current) bottomLogRef.current.scrollTop = bottomLogRef.current.scrollHeight; }, [resultLog]);
 
-  // --- LOGIC: CHUYỂN ĐỔI CHẾ ĐỘ (Mode Switch) ---
+  // --- LOGIC: CHUYỂN ĐỔI CHẾ ĐỘ ---
   const handleSwitchMode = (targetModeDirected: boolean) => {
       if (isDirected === targetModeDirected) return;
-      // QUAN TRỌNG: Xóa hết cạnh khi đổi chế độ thủ công để tránh lỗi logic
       edgesRef.current.clear(); 
-      Toastify({ 
-          text: `Đã chuyển sang ${targetModeDirected ? "Có hướng" : "Vô hướng"} (Reset cạnh)`, 
-          backgroundColor: "#4f46e5", 
-          gravity: "bottom" 
-      }).showToast();
+      Toastify({ text: `Đã chuyển sang ${targetModeDirected ? "Có hướng" : "Vô hướng"} (Reset cạnh)`, backgroundColor: "#4f46e5", gravity: "bottom" }).showToast();
       setIsDirected(targetModeDirected);
   };
 
   // ==========================================
-  // --- TÍNH NĂNG MỚI: SAVE & LOAD JSON ---
+  // --- TÍNH NĂNG: SAVE/LOAD & SNAPSHOT ---
   // ==========================================
   
-  // 1. Lưu file (Export JSON)
+  // 1. Lưu file JSON
   const handleSaveGraph = () => {
       const dataToSave = {
-          nodes: nodesRef.current.get(), // Lấy toàn bộ nodes (kèm tọa độ x, y)
-          edges: edgesRef.current.get(), // Lấy toàn bộ edges (kèm trọng số)
-          isDirected: isDirected,        // Lưu chế độ hiện tại
+          nodes: nodesRef.current.get(),
+          edges: edgesRef.current.get(),
+          isDirected: isDirected,
           timestamp: new Date().toISOString()
       };
-
-      const jsonString = JSON.stringify(dataToSave, null, 2);
-      const blob = new Blob([jsonString], { type: "application/json" });
+      const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
-      
-      // Tạo thẻ a ảo để kích hoạt download
       const link = document.createElement('a');
-      link.href = url;
-      link.download = `graph_data_${Date.now()}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      Toastify({ text: "💾 Đã lưu file thành công!", backgroundColor: "#10b981" }).showToast();
+      link.href = url; link.download = `graph_data_${Date.now()}.json`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      Toastify({ text: "💾 Đã lưu file JSON!", backgroundColor: "#10b981" }).showToast();
   };
 
-  // 2. Kích hoạt input file
-  const handleTriggerLoad = () => {
-      if(fileInputRef.current) fileInputRef.current.click();
-  };
+  // 2. Kích hoạt load file
+  const handleTriggerLoad = () => fileInputRef.current?.click();
 
-  // 3. Xử lý đọc file (Import JSON)
   const handleLoadFile = (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = (e) => {
           try {
-              const content = e.target?.result as string;
-              const parsedData = JSON.parse(content);
-
-              // Validate sơ bộ
-              if (!parsedData.nodes || !parsedData.edges) {
-                  throw new Error("File không đúng định dạng đồ thị!");
-              }
-
-              if (window.confirm("Bạn có chắc muốn tải file này? Đồ thị hiện tại sẽ bị ghi đè.")) {
-                  // Xóa đồ thị cũ
-                  nodesRef.current.clear();
-                  edgesRef.current.clear();
-
-                  // Cập nhật chế độ trước
+              const parsedData = JSON.parse(e.target?.result as string);
+              if (!parsedData.nodes || !parsedData.edges) throw new Error("File lỗi!");
+              if (window.confirm("Ghi đè đồ thị hiện tại?")) {
+                  nodesRef.current.clear(); edgesRef.current.clear();
                   setIsDirected(!!parsedData.isDirected);
-
-                  // Thêm dữ liệu mới (setTimeout để đảm bảo render kịp)
                   setTimeout(() => {
                       nodesRef.current.add(parsedData.nodes);
                       edgesRef.current.add(parsedData.edges);
-                      networkRef.current?.fit(); // Zoom vừa màn hình
-                      Toastify({ text: "📂 Đã tải đồ thị thành công!", backgroundColor: "#10b981" }).showToast();
+                      networkRef.current?.fit();
+                      Toastify({ text: "📂 Đã tải đồ thị!", backgroundColor: "#10b981" }).showToast();
                   }, 100);
               }
-          } catch (err) {
-              Toastify({ text: "❌ Lỗi đọc file: File không hợp lệ!", backgroundColor: "#ef4444" }).showToast();
-          }
+          } catch (err) { Toastify({ text: "❌ File không hợp lệ!", backgroundColor: "#ef4444" }).showToast(); }
       };
       reader.readAsText(file);
-      // Reset input để chọn lại file cùng tên vẫn chạy
       event.target.value = ''; 
+  };
+
+  // 3. TÍNH NĂNG MỚI: CHỤP ẢNH (SNAPSHOT)
+  const handleSaveImage = () => {
+      if (!containerRef.current) return;
+      // Tìm thẻ canvas thật do vis-network tạo ra
+      const canvas = containerRef.current.querySelector('canvas');
+      if (canvas) {
+          // Tạo một canvas tạm để lót nền trắng (vì mặc định nó trong suốt)
+          const compositeCanvas = document.createElement('canvas');
+          compositeCanvas.width = canvas.width;
+          compositeCanvas.height = canvas.height;
+          const ctx = compositeCanvas.getContext('2d');
+          
+          if (ctx) {
+              // 1. Lót nền trắng
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              // 2. Vẽ đồ thị lên trên
+              ctx.drawImage(canvas, 0, 0);
+              
+              // 3. Xuất ảnh
+              const imageLink = compositeCanvas.toDataURL("image/png");
+              const link = document.createElement('a');
+              link.href = imageLink;
+              link.download = `graph_snapshot_${Date.now()}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              
+              Toastify({ text: "📸 Đã chụp ảnh đồ thị!", backgroundColor: "#3b82f6" }).showToast();
+          }
+      }
   };
 
   // --- INIT VIS-NETWORK ---
@@ -193,7 +193,6 @@ const App: React.FC = () => {
     const net = new Network(containerRef.current, { nodes: nodesRef.current, edges: edgesRef.current } as any, options);
     networkRef.current = net;
     
-    // Sự kiện Click
     net.on("click", (params) => {
         if (activeToolRef.current === 'delete') {
             if (params.nodes.length > 0) {
@@ -210,7 +209,6 @@ const App: React.FC = () => {
     return () => net.destroy();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cập nhật option khi đổi mode
   useEffect(() => {
       if (networkRef.current) {
           networkRef.current.setOptions({ 
@@ -222,7 +220,6 @@ const App: React.FC = () => {
       }
   }, [isDirected]);
 
-  // Cập nhật con trỏ chuột theo Tool
   useEffect(() => {
     const net = networkRef.current; if (!net) return;
     net.disableEditMode(); containerRef.current!.style.cursor = 'default';
@@ -234,7 +231,6 @@ const App: React.FC = () => {
 
   useEffect(() => { if (modalOpen) setTimeout(() => inputWeightRef.current?.focus(), 50); }, [modalOpen]);
 
-  // --- HANDLERS ---
   const handleSaveWeight = () => {
     if (editingEdgeId) {
         const w = Number(inputWeight);
@@ -248,28 +244,18 @@ const App: React.FC = () => {
   const handleClear = () => { if (window.confirm("Xóa toàn bộ đồ thị?")) { nodesRef.current.clear(); edgesRef.current.clear(); setResultLog("Graph Cleared"); } };
   const handleShowRep = () => { setRepresentations(getRepresentations(nodesRef.current.get(), edgesRef.current.get(), isDirected)); setRepModalOpen(true); };
 
-  // ===========================================
-  // MASTER FUNCTION: HANDLE RUN (CORE LOGIC)
-  // ===========================================
+  // --- ALGORITHM EXECUTION ---
   const handleRun = async () => {
     if (isRunning) return; setActiveTool('cursor');
     
-    // 1. RESET GRAPH STYLES
-    nodesRef.current.update(nodesRef.current.get().map((n:any) => ({ 
-        id: n.id, color: { background: "#ffffff", border: "#4f46e5" }, 
-        shadow: { enabled: true, color: "rgba(0,0,0,0.1)", size: 4 } 
-    })));
-    edgesRef.current.update(edgesRef.current.get().map((e:any) => ({ 
-        id: e.id, color: { color: "#94a3b8" }, width: 2, 
-        font: { color: "#4f46e5", strokeWidth: 3, strokeColor: 'white' }, 
-        label: e.weight ? String(e.weight) : "" 
-    })));
+    // Reset Style
+    nodesRef.current.update(nodesRef.current.get().map((n:any) => ({ id: n.id, color: { background: "#ffffff", border: "#4f46e5" }, shadow: { enabled: true, color: "rgba(0,0,0,0.1)", size: 4 } })));
+    edgesRef.current.update(edgesRef.current.get().map((e:any) => ({ id: e.id, color: { color: "#94a3b8" }, width: 2, font: { color: "#4f46e5", strokeWidth: 3, strokeColor: 'white' }, label: e.weight ? String(e.weight) : "" })));
 
     const allNodes = nodesRef.current.get();
     const allEdges = edgesRef.current.get();
     if (allNodes.length === 0) { Toastify({ text: "Đồ thị trống!", backgroundColor: "#ef4444" }).showToast(); return; }
 
-    // 2. CHECK TRỌNG SỐ CHO DIJKSTRA
     if (selectedAlgo === 'dijkstra') {
         const invalid = allEdges.filter((e: any) => !e.weight || Number(e.weight) <= 0);
         if (invalid.length > 0) {
@@ -279,7 +265,6 @@ const App: React.FC = () => {
         }
     }
 
-    // 3. BUILD DATA STRUCTURE
     const adjList: any = {};
     allNodes.forEach((n: any) => adjList[String(n.id)] = []);
     const edgesArr: any[] = []; 
@@ -294,69 +279,41 @@ const App: React.FC = () => {
     setIsRunning(true);
     const sNode = String(startNode).trim(); const eNode = String(endNode).trim();
 
-    // --- STYLE CONFIG ---
-    const scanStyle = { 
-        node: { background: "#bfdbfe", border: "#3b82f6" }, 
-        edge: { color: "#3b82f6", width: 4 }               
-    };
-    const pathStyle = { 
-        node: { background: "#facc15", border: "#eab308", shadow: { enabled: true, color: "rgba(250, 204, 21, 0.6)", size: 10 } },
-        edge: { color: "#facc15", width: 6, shadow: { enabled: true, color: "rgba(250, 204, 21, 0.6)", size: 10 } }
-    };
+    const scanStyle = { node: { background: "#bfdbfe", border: "#3b82f6" }, edge: { color: "#3b82f6", width: 4 } };
+    const pathStyle = { node: { background: "#facc15", border: "#eab308", shadow: { enabled: true, color: "rgba(250, 204, 21, 0.6)", size: 10 } }, edge: { color: "#facc15", width: 6, shadow: { enabled: true, color: "rgba(250, 204, 21, 0.6)", size: 10 } } };
     const mstStyle = { node: { background: "#10b981", border: "#059669" }, edge: { color: "#10b981", width: 5 } };
     const flowStyle = { edge: { color: "#ef4444", width: 4 } };
 
     const highlightEdge = async (u: string, v: string, style: any) => {
-        const edge = allEdges.find((e: any) => 
-            (String(e.from) === u && String(e.to) === v) || 
-            (!isDirected && String(e.from) === v && String(e.to) === u)
-        );
-        if (edge) {
-            edgesRef.current.update({ id: edge.id, ...style.edge });
-            await sleep(150);
-        }
+        const edge = allEdges.find((e: any) => (String(e.from) === u && String(e.to) === v) || (!isDirected && String(e.from) === v && String(e.to) === u));
+        if (edge) { edgesRef.current.update({ id: edge.id, ...style.edge }); await sleep(150); }
     };
 
-    // ================================
-    // ALGORITHM EXECUTION BLOCK
-    // ================================
-
+    // ALGORITHMS
     if (selectedAlgo === 'bfs' || selectedAlgo === 'dfs') {
         if(!sNode) { Toastify({ text: "Chọn điểm bắt đầu!", backgroundColor: "#f59e0b" }).showToast(); setIsRunning(false); return; }
         
         let res: any;
-        if (selectedAlgo === 'bfs') {
-             res = bfs(adjList, sNode);
-             setResultLog(<div>🌊 <b>BFS Traversal</b> (Lan truyền)</div>);
-        } else {
-             res = dfs(adjList, sNode);
-             setResultLog(<div>⛏️ <b>DFS Traversal</b> (Đào sâu)</div>);
-        }
+        if (selectedAlgo === 'bfs') { res = bfs(adjList, sNode); setResultLog(<div>🌊 <b>BFS Traversal</b></div>); }
+        else { res = dfs(adjList, sNode); setResultLog(<div>⛏️ <b>DFS Traversal</b></div>); }
 
-        if (res.error) {
-            setResultLog(<span className="error-text">{res.error}</span>);
-        } else {
+        if (res.error) setResultLog(<span className="error-text">{res.error}</span>);
+        else {
             for (const nodeId of res.visitedOrder) {
                 nodesRef.current.update({ id: nodeId, ...scanStyle.node });
                 const parentId = res.previous[nodeId];
-                if (parentId) await highlightEdge(parentId, nodeId, scanStyle);
-                else await sleep(200); 
+                if (parentId) await highlightEdge(parentId, nodeId, scanStyle); else await sleep(200); 
             }
             setResultLog(<div>✅ <b>Duyệt Hoàn Tất!</b><br/>Thứ tự: {res.visitedOrder.join(" ➔ ")}</div>);
         }
     }
-
     else if (selectedAlgo === 'dijkstra') {
         if(!sNode || !eNode) { Toastify({ text: "Nhập Start & End!", backgroundColor: "#f59e0b" }).showToast(); setIsRunning(false); return; }
-        
         const res = dijkstra(adjList, sNode, eNode);
         if (res.error) setResultLog(<span className="error-text">{res.error}</span>);
         else {
             setResultLog(<div>🚀 Dijkstra Scanning...</div>);
-            for (const n of res.visitedOrder) { 
-                nodesRef.current.update({ id: n, background: "#e0e7ff", border: "#a5b4fc" }); 
-                await sleep(50); 
-            }
+            for (const n of res.visitedOrder) { nodesRef.current.update({ id: n, background: "#e0e7ff", border: "#a5b4fc" }); await sleep(50); }
             if (res.path.length > 0) {
                 for (let i = 0; i < res.path.length; i++) {
                     const u = res.path[i];
@@ -367,46 +324,31 @@ const App: React.FC = () => {
             } else setResultLog(<div className="error-text">Không tìm thấy đường đi!</div>);
         }
     }
-    
     else if (selectedAlgo === 'prim' || selectedAlgo === 'kruskal') {
-        if (isDirected) {
-            Toastify({ text: "⛔ MST chỉ dùng cho đồ thị VÔ HƯỚNG!", backgroundColor: "#ef4444", duration: 3000 }).showToast();
-            setIsRunning(false); return;
-        }
-        
+        if (isDirected) { Toastify({ text: "⛔ MST chỉ dùng cho đồ thị VÔ HƯỚNG!", backgroundColor: "#ef4444", duration: 3000 }).showToast(); setIsRunning(false); return; }
         setResultLog(<div>🚀 Running {selectedAlgo.toUpperCase()}...</div>);
         let mstEdges: any[] = []; let totalCost = 0;
-        
-        if (selectedAlgo === 'prim') {
-            const res = prim(adjList); mstEdges = res.mstEdges; totalCost = res.cost;
-        } else {
-            const res = kruskal(allNodes.map((n:any)=>String(n.id)), edgesArr); mstEdges = res.mstEdges; totalCost = res.cost;
-        }
-
+        if (selectedAlgo === 'prim') { const res = prim(adjList); mstEdges = res.mstEdges; totalCost = res.cost; }
+        else { const res = kruskal(allNodes.map((n:any)=>String(n.id)), edgesArr); mstEdges = res.mstEdges; totalCost = res.cost; }
         for (const edge of mstEdges) {
             nodesRef.current.update([{id: edge.from, ...mstStyle.node}, {id: edge.to, ...mstStyle.node}]);
             await highlightEdge(edge.from, edge.to, mstStyle);
         }
         setResultLog(<div>✅ <b>MST Done</b><br/>Total Cost: <b>{totalCost}</b></div>);
     }
-
     else if (selectedAlgo === 'bipartite') {
-        if (isDirected) {
-            Toastify({ text: "⚠️ Thường dùng cho đồ thị VÔ HƯỚNG!", backgroundColor: "#f59e0b" }).showToast();
-            setIsRunning(false); return;
-        }
+        if (isDirected) { Toastify({ text: "⚠️ Thường dùng cho đồ thị VÔ HƯỚNG!", backgroundColor: "#f59e0b" }).showToast(); setIsRunning(false); return; }
         setResultLog("🔍 Checking Bipartite..."); await sleep(500);
         const res = checkBipartite(adjList);
         if (res.isBipartite) {
-            res.setA.forEach(id => nodesRef.current.update({ id, color: { background: "#fca5a5", border: "#dc2626" } })); 
-            res.setB.forEach(id => nodesRef.current.update({ id, color: { background: "#93c5fd", border: "#2563eb" } })); 
-            setResultLog(<div>✅ <b>Đồ thị 2 phía</b> (Bipartite)</div>);
+            res.setA.forEach(id => nodesRef.current.update({ id, color: { background: "#fca5a5", border: "#dc2626" } }));
+            res.setB.forEach(id => nodesRef.current.update({ id, color: { background: "#93c5fd", border: "#2563eb" } }));
+            setResultLog(<div>✅ <b>Bipartite Graph</b></div>);
         } else {
-            setResultLog(<div className="error-text">❌ Không phải 2 phía<br/>Conflict: {res.conflictNode}</div>);
+            setResultLog(<div className="error-text">❌ Conflict: {res.conflictNode}</div>);
             if(res.conflictNode) nodesRef.current.update({ id: res.conflictNode, color: { background: "#000", border: "red" } });
         }
     }
-
     else if (selectedAlgo === 'fleury' || selectedAlgo === 'hierholzer') {
         const res = selectedAlgo === 'fleury' ? fleury(adjList, isDirected) : hierholzer(adjList, isDirected);
         if (res.error) setResultLog(<span className="error-text">{res.error}</span>);
@@ -420,11 +362,9 @@ const App: React.FC = () => {
             setResultLog(<div>✅ <b>Euler Found</b><br/>{path.join(" ➔ ")}</div>);
         }
     }
-
     else if (selectedAlgo === 'fordfulkerson') {
          if (!isDirected) { Toastify({ text: "⛔ Max Flow cần đồ thị CÓ HƯỚNG!", backgroundColor: "#ef4444" }).showToast(); setIsRunning(false); return; }
          if(!sNode || !eNode) { Toastify({ text: "Nhập Start & End!", backgroundColor: "#f59e0b" }).showToast(); setIsRunning(false); return; }
-
          const res = fordFulkerson(adjList, sNode, eNode);
          if (res.error) setResultLog(<span className="error-text">{res.error}</span>);
          else {
@@ -433,18 +373,13 @@ const App: React.FC = () => {
                 const visEdge = allEdges.find((e:any) => String(e.from)===fe.from && String(e.to)===fe.to);
                 if(visEdge) {
                     const capacity = visEdge.weight || 0;
-                    edgesRef.current.update({ 
-                        id: visEdge.id, 
-                        label: `${fe.flow}/${capacity}`, 
-                        ...flowStyle.edge 
-                    });
+                    edgesRef.current.update({ id: visEdge.id, label: `${fe.flow}/${capacity}`, ...flowStyle.edge });
                     await sleep(200);
                 }
             }
             setResultLog(<div>✅ <b>Max Flow: {res.maxFlow}</b></div>);
          }
     }
-
     setIsRunning(false);
   };
 
@@ -468,7 +403,6 @@ const App: React.FC = () => {
              <option value="hierholzer">Hierholzer (Euler)</option>
           </select>
 
-          {/* INPUT AREA */}
           <div className="input-row">
              {['dijkstra','bfs','dfs','fordfulkerson'].includes(selectedAlgo) && (
                 <input type="text" placeholder="Start" value={startNode} onChange={e => setStartNode(e.target.value)} title="Start Node"/>
@@ -482,9 +416,7 @@ const App: React.FC = () => {
           </div>
 
           {['fleury', 'hierholzer'].includes(selectedAlgo) && (
-            <div style={{fontSize: '0.8rem', color: '#64748b', textAlign: 'center', marginBottom: 10, fontStyle: 'italic'}}>
-                *Tự động tìm điểm bắt đầu
-            </div>
+            <div style={{fontSize: '0.8rem', color: '#64748b', textAlign: 'center', marginBottom: 10, fontStyle: 'italic'}}>*Tự động tìm điểm bắt đầu</div>
           )}
           
           <button className="btn-primary" onClick={handleRun} disabled={isRunning}>
@@ -494,25 +426,28 @@ const App: React.FC = () => {
           <button className="btn-secondary" onClick={handleShowRep}><i className="fa-solid fa-code"></i> Code Representation</button>
           <button className="btn-secondary" onClick={handleClear} disabled={isRunning}>Reset Graph</button>
           
-          {/* --- TÍNH NĂNG MỚI: SAVE & LOAD --- */}
+          {/* ACTION BUTTONS */}
           <div style={{marginTop: 15, borderTop: '1px solid #e2e8f0', paddingTop: 10}}>
+             {/* SAVE JSON */}
              <button className="btn-secondary" onClick={handleSaveGraph} style={{background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0'}}>
                  <i className="fa-solid fa-download"></i> Lưu File (JSON)
              </button>
+             {/* LOAD JSON */}
              <button className="btn-secondary" onClick={handleTriggerLoad} style={{marginTop: 5}}>
                  <i className="fa-solid fa-upload"></i> Mở File (JSON)
              </button>
-             {/* Input file ẩn */}
+             {/* SNAPSHOT PNG */}
+             <button className="btn-secondary" onClick={handleSaveImage} style={{marginTop: 5, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe'}}>
+                 <i className="fa-solid fa-camera"></i> Lưu Ảnh (PNG)
+             </button>
              <input type="file" ref={fileInputRef} onChange={handleLoadFile} style={{display: 'none'}} accept=".json"/>
           </div>
-
         </div>
       </aside>
 
       <div className="main-content">
           <div className="canvas-area">
               <div id="graph-container" ref={containerRef}></div>
-              
               <div className="floating-toolbar">
                  <div className="mode-switch-container">
                     <div className="mode-bg-slider" style={{ transform: isDirected ? 'translateX(100%)' : 'translateX(0)' }}></div>
