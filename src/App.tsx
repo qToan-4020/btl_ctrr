@@ -83,7 +83,8 @@ const App: React.FC = () => {
       nodes: {
         shape: "circle", size: 26, borderWidth: 2,
         color: { background: "#ffffff", border: "#4f46e5", highlight: { background: "#e0e7ff", border: "#4338ca" } },
-        font: { size: 16, color: "#4f46e5", bold: true, align: 'center', face: 'Inter, sans-serif' },
+        // [FIX 1] Removed 'bold: true' to fix TS2345 error
+        font: { size: 16, color: "#4f46e5", align: 'center', face: 'Inter, sans-serif' },
         shadow: { enabled: true, color: "rgba(0,0,0,0.1)", size: 4, x: 1, y: 1 },
       },
       edges: {
@@ -137,7 +138,13 @@ const App: React.FC = () => {
   // Cập nhật option khi đổi mode
   useEffect(() => {
       if (networkRef.current) {
-          networkRef.current.setOptions({ edges: { arrows: { to: { enabled: isDirected } }, smooth: { enabled: true, type: isDirected ? 'curvedCW' : 'continuous' } } });
+          networkRef.current.setOptions({ 
+            edges: { 
+                arrows: { to: { enabled: isDirected } }, 
+                // [FIX 2] Added 'roundness: 0.1' to fix TS2322 error
+                smooth: { enabled: true, type: isDirected ? 'curvedCW' : 'continuous', roundness: 0.1 } 
+            } 
+        });
       }
   }, [isDirected]);
 
@@ -217,12 +224,10 @@ const App: React.FC = () => {
     const sNode = String(startNode).trim(); const eNode = String(endNode).trim();
 
     // --- STYLE CONFIG ---
-    // Style cho việc QUÉT (Scanning/Traversal) - Xanh Dương
     const scanStyle = { 
         node: { background: "#bfdbfe", border: "#3b82f6" }, 
         edge: { color: "#3b82f6", width: 4 }               
     };
-    // Style cho KẾT QUẢ ĐƯỜNG ĐI (Path) - Vàng Cam
     const pathStyle = { 
         node: { background: "#facc15", border: "#eab308", shadow: { enabled: true, color: "rgba(250, 204, 21, 0.6)", size: 10 } },
         edge: { color: "#facc15", width: 6, shadow: { enabled: true, color: "rgba(250, 204, 21, 0.6)", size: 10 } }
@@ -345,7 +350,8 @@ const App: React.FC = () => {
         if (res.error) setResultLog(<span className="error-text">{res.error}</span>);
         else {
             setResultLog(<div>🚀 Euler Path ({res.type})...</div>);
-            const path = res.path;
+            // [FIX 3] Added default array fallback to fix TS18048 error
+            const path = res.path || []; 
             for(let i=0; i<path.length; i++) {
                 nodesRef.current.update({ id: path[i], ...pathStyle.node }); await sleep(300);
                 if(i < path.length-1) await highlightEdge(path[i], path[i+1], pathStyle);
